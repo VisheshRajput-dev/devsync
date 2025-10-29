@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Code2, Users, Zap } from 'lucide-react';
+import devsyncLogo from '../assets/devsync-logo.png';
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
@@ -62,14 +63,18 @@ const Home: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen" style={{backgroundColor: 'hsl(20 14.3% 4.1%)'}}>
+    <div className="w-full h-screen overflow-auto" style={{backgroundColor: 'hsl(20 14.3% 4.1%)'}}>
       <div className="container mx-auto px-4 py-16">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <div className="flex items-center justify-center mb-6">
-            <Code2 className="h-12 w-12 text-primary mr-3" />
-            <h1 className="text-4xl font-bold text-foreground">Devsync</h1>
-          </div>
+            {/* Header */}
+            <div className="text-center mb-12">
+              <div className="flex items-center justify-center mb-6">
+                <img 
+                  src={devsyncLogo} 
+                  alt="Devsync Logo" 
+                  className="h-16 w-auto mr-4"
+                />
+                <h1 className="text-4xl font-bold text-foreground">Devsync</h1>
+              </div>
           <p className="text-xl text-muted-foreground mb-8">
             Real-time collaborative code editor for developers
           </p>

@@ -3,6 +3,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { User } from 'lucide-react';
+import devsyncLogo from '../assets/devsync-logo.png';
 
 interface UsernamePromptProps {
   onUsernameSubmit: (username: string) => void;
@@ -24,8 +25,12 @@ const UsernamePrompt: React.FC<UsernamePromptProps> = ({ onUsernameSubmit, roomI
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex items-center justify-center mb-4">
-            <User className="h-8 w-8 text-primary mr-2" />
-            <CardTitle>Enter Your Username</CardTitle>
+            <img 
+              src={devsyncLogo} 
+              alt="Devsync Logo" 
+              className="h-12 w-auto mr-3"
+            />
+            <CardTitle className="text-2xl font-bold">Devsync</CardTitle>
           </div>
           <p className="text-muted-foreground text-sm">
             You need to enter your username to join room: <span className="font-mono text-primary">{roomId.slice(0, 8)}...</span>

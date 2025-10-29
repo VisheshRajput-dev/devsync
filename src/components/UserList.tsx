@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { User } from '../types';
 import { Users, Circle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface UserListProps {
   users: User[];
@@ -22,14 +23,14 @@ const UserList: React.FC<UserListProps> = ({ users, currentUsername }) => {
 
   const getAvatarColor = (username: string) => {
     const colors = [
-      'bg-red-500',
-      'bg-blue-500', 
-      'bg-green-500',
-      'bg-yellow-500',
-      'bg-purple-500',
-      'bg-pink-500',
-      'bg-indigo-500',
-      'bg-orange-500'
+      'bg-gradient-to-br from-red-500 to-red-600',
+      'bg-gradient-to-br from-blue-500 to-blue-600', 
+      'bg-gradient-to-br from-green-500 to-green-600',
+      'bg-gradient-to-br from-yellow-500 to-yellow-600',
+      'bg-gradient-to-br from-purple-500 to-purple-600',
+      'bg-gradient-to-br from-pink-500 to-pink-600',
+      'bg-gradient-to-br from-indigo-500 to-indigo-600',
+      'bg-gradient-to-br from-orange-500 to-orange-600'
     ];
     const hash = username.split('').reduce((a, b) => {
       a = ((a << 5) - a) + b.charCodeAt(0);
@@ -39,74 +40,78 @@ const UserList: React.FC<UserListProps> = ({ users, currentUsername }) => {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="h-full flex flex-col bg-background">
       {/* Header */}
       <div className="border-b bg-muted/30 px-4 py-3">
         <div className="flex items-center space-x-2">
-          <Users className="h-4 w-4" />
-          <h3 className="font-semibold text-sm">Online Users</h3>
+          <div className="p-1.5 bg-primary/10 rounded-lg">
+            <Users className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <div className="text-base font-semibold">Online Users</div>
+            <Badge variant="secondary" className="text-xs mt-1">
+              {users.length} user{users.length !== 1 ? 's' : ''} online
+            </Badge>
+          </div>
         </div>
-        <Badge variant="secondary" className="mt-1 text-xs">
-          {users.length} user{users.length !== 1 ? 's' : ''}
-        </Badge>
       </div>
 
-      {/* Users List */}
-      <ScrollArea className="flex-1">
-        <div className="p-4 space-y-2">
-          {users.length === 0 ? (
-            <div className="text-center text-muted-foreground text-sm py-8">
-              <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>No users online</p>
-            </div>
-          ) : (
-            users.map((user) => (
+      {/* User List - Scrollable */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div className="p-4 space-y-2">
+            {users.map((user) => (
               <div
                 key={user.id}
-                className="flex items-center space-x-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                className={cn(
+                  "flex items-center space-x-3 p-3 rounded-lg transition-all duration-200",
+                  "hover:bg-muted/50 group",
+                  user.username === currentUsername && "bg-primary/5 border border-primary/20"
+                )}
               >
+                {/* Avatar with Status */}
                 <div className="relative">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className={`text-white text-xs ${getAvatarColor(user.username)}`}>
+                  <Avatar className={cn("h-10 w-10 ring-2 ring-background", getAvatarColor(user.username))}>
+                    <AvatarFallback className="text-white text-sm font-bold bg-transparent">
                       {getInitials(user.username)}
                     </AvatarFallback>
                   </Avatar>
-                  <Circle 
-                    className="absolute -bottom-0.5 -right-0.5 h-3 w-3 fill-green-500 text-green-500" 
-                    strokeWidth={0}
-                  />
+                  <div className="absolute -bottom-0.5 -right-0.5">
+                    <Circle className="h-3 w-3 fill-green-500 text-green-500" />
+                  </div>
                 </div>
-                
+
+                {/* User Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center space-x-2">
                     <span className="text-sm font-medium truncate">
                       {user.username}
                     </span>
                     {user.username === currentUsername && (
-                      <Badge variant="outline" className="text-xs px-1 py-0">
+                      <Badge variant="outline" className="text-xs px-1.5 py-0.5">
                         You
                       </Badge>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Online
-                  </p>
+                  <div className="flex items-center space-x-1 text-xs text-muted-foreground">
+                    <Circle className="h-2 w-2 fill-green-500 text-green-500" />
+                    <span>Active</span>
+                  </div>
                 </div>
               </div>
-            ))
-          )}
-        </div>
-      </ScrollArea>
+            ))}
 
-      {/* Footer */}
-      <div className="border-t bg-muted/30 px-4 py-2">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Real-time sync</span>
-          <div className="flex items-center space-x-1">
-            <Circle className="h-2 w-2 fill-green-500 text-green-500" strokeWidth={0} />
-            <span>Active</span>
+            {/* Empty State */}
+            {users.length === 0 && (
+              <div className="text-center py-8">
+                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  No users online
+                </p>
+              </div>
+            )}
           </div>
-        </div>
+        </ScrollArea>
       </div>
     </div>
   );

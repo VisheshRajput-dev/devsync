@@ -1,7 +1,20 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Copy, LogOut, Moon, Sun, Users, Play, Save, Download } from 'lucide-react';
+import { 
+  Copy, 
+  LogOut, 
+  Moon, 
+  Sun, 
+  Users, 
+  Play, 
+  Save, 
+  Download,
+  Wifi,
+  Clock
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import devsyncLogo from '../assets/devsync-logo.png';
 
 interface TopBarProps {
   roomId: string;
@@ -26,12 +39,11 @@ const TopBar: React.FC<TopBarProps> = ({
   lastSaved,
   isSaving = false
 }) => {
-  const [isDarkMode, setIsDarkMode] = useState(true); // Default to dark mode
+  const [isDarkMode, setIsDarkMode] = useState(true);
   const [copied, setCopied] = useState(false);
 
   const toggleTheme = () => {
     setIsDarkMode(!isDarkMode);
-    // Toggle dark mode on document
     document.documentElement.classList.toggle('dark');
   };
 
@@ -46,27 +58,64 @@ const TopBar: React.FC<TopBarProps> = ({
     }
   };
 
+  const formatLastSaved = (date: Date | null) => {
+    if (!date) return null;
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
+    
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return date.toLocaleDateString();
+  };
+
   return (
-    <div className="h-16 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
-      <div className="flex items-center justify-between h-full px-4 md:px-6">
-        {/* Left side - Room info */}
-        <div className="flex items-center space-x-2 md:space-x-4">
-          <div className="flex items-center space-x-1 md:space-x-2">
-            <h1 className="text-base md:text-lg font-semibold">Devsync</h1>
-            <Badge variant="secondary" className="text-xs hidden sm:inline-flex">
-              Room: {roomId.slice(0, 8)}...
-            </Badge>
+    <div className="h-16 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 sticky top-0 z-50 w-full">
+      <div className="flex items-center justify-between h-full px-4 md:px-6 w-full">
+        {/* Left side - Brand & Room info */}
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
+            <img 
+              src={devsyncLogo} 
+              alt="Devsync Logo" 
+              className="h-8 w-auto"
+            />
+            <h1 className="text-lg font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              Devsync
+            </h1>
           </div>
           
-          <div className="flex items-center space-x-1 text-xs md:text-sm text-muted-foreground">
-            <Users className="h-3 w-3 md:h-4 md:w-4" />
-            <span className="hidden sm:inline">{userCount} user{userCount !== 1 ? 's' : ''}</span>
-            <span className="sm:hidden">{userCount}</span>
+          <div className="hidden sm:flex items-center space-x-3">
+            <Badge variant="secondary" className="text-xs font-mono">
+              {roomId.slice(0, 8)}...
+            </Badge>
+            
+            <div className="flex items-center space-x-1 text-sm text-muted-foreground">
+              <Users className="h-4 w-4" />
+              <span>{userCount} user{userCount !== 1 ? 's' : ''}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Center - Status indicators */}
+        <div className="hidden md:flex items-center space-x-4">
+          {lastSaved && (
+            <div className="flex items-center space-x-1 text-xs text-muted-foreground">
+              <Clock className="h-3 w-3" />
+              <span>Saved {formatLastSaved(lastSaved)}</span>
+            </div>
+          )}
+          
+          <div className="flex items-center space-x-1 text-xs text-green-600">
+            <Wifi className="h-3 w-3" />
+            <span>Connected</span>
           </div>
         </div>
 
         {/* Right side - Actions */}
-        <div className="flex items-center space-x-1 md:space-x-2 flex-wrap">
+        <div className="flex items-center space-x-2">
           {/* Code Execution */}
           {onRunCode && (
             <Button
@@ -74,11 +123,17 @@ const TopBar: React.FC<TopBarProps> = ({
               size="sm"
               onClick={onRunCode}
               disabled={isExecuting}
-              className="flex items-center space-x-1 md:space-x-2 px-2 md:px-3"
+              className={cn(
+                "flex items-center space-x-2 px-3 py-2 h-8",
+                "hover:bg-green-50 hover:border-green-200 hover:text-green-700",
+                "dark:hover:bg-green-950 dark:hover:border-green-800 dark:hover:text-green-300",
+                "transition-all duration-200"
+              )}
             >
-              <Play className="h-3 w-3 md:h-4 md:w-4" />
-              <span className="hidden sm:inline">{isExecuting ? 'Running...' : 'Run Code'}</span>
-              <span className="sm:hidden">{isExecuting ? '...' : 'Run'}</span>
+              <Play className="h-3 w-3" />
+              <span className="hidden sm:inline text-xs font-medium">
+                {isExecuting ? 'Running...' : 'Run Code'}
+              </span>
             </Button>
           )}
 
@@ -89,11 +144,17 @@ const TopBar: React.FC<TopBarProps> = ({
               size="sm"
               onClick={onSaveSession}
               disabled={isSaving}
-              className="flex items-center space-x-1 md:space-x-2 px-2 md:px-3"
+              className={cn(
+                "flex items-center space-x-2 px-3 py-2 h-8",
+                "hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700",
+                "dark:hover:bg-blue-950 dark:hover:border-blue-800 dark:hover:text-blue-300",
+                "transition-all duration-200"
+              )}
             >
-              <Save className="h-3 w-3 md:h-4 md:w-4" />
-              <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save Session'}</span>
-              <span className="sm:hidden">{isSaving ? '...' : 'Save'}</span>
+              <Save className="h-3 w-3" />
+              <span className="hidden sm:inline text-xs font-medium">
+                {isSaving ? 'Saving...' : 'Save'}
+              </span>
             </Button>
           )}
 
@@ -102,55 +163,71 @@ const TopBar: React.FC<TopBarProps> = ({
               variant="outline"
               size="sm"
               onClick={onLoadSession}
-              className="flex items-center space-x-1 md:space-x-2 px-2 md:px-3"
+              className={cn(
+                "flex items-center space-x-2 px-3 py-2 h-8",
+                "hover:bg-purple-50 hover:border-purple-200 hover:text-purple-700",
+                "dark:hover:bg-purple-950 dark:hover:border-purple-800 dark:hover:text-purple-300",
+                "transition-all duration-200"
+              )}
             >
-              <Download className="h-3 w-3 md:h-4 md:w-4" />
-              <span className="hidden sm:inline">Load Session</span>
-              <span className="sm:hidden">Load</span>
+              <Download className="h-3 w-3" />
+              <span className="hidden sm:inline text-xs font-medium">Load</span>
             </Button>
           )}
 
-          {/* Last Saved Indicator */}
-          {lastSaved && (
-            <Badge variant="outline" className="text-xs">
-              Saved {lastSaved.toLocaleTimeString()}
-            </Badge>
-          )}
-
+          {/* Copy Link */}
           <Button
             variant="outline"
             size="sm"
             onClick={copyRoomLink}
-            className="flex items-center space-x-1 md:space-x-2 px-2 md:px-3"
+            className={cn(
+              "flex items-center space-x-2 px-3 py-2 h-8",
+              "hover:bg-orange-50 hover:border-orange-200 hover:text-orange-700",
+              "dark:hover:bg-orange-950 dark:hover:border-orange-800 dark:hover:text-orange-300",
+              "transition-all duration-200"
+            )}
           >
-            <Copy className="h-3 w-3 md:h-4 md:w-4" />
-            <span className="hidden sm:inline">{copied ? 'Copied!' : 'Copy Link'}</span>
-            <span className="sm:hidden">{copied ? '✓' : 'Copy'}</span>
+            <Copy className="h-3 w-3" />
+            <span className="hidden sm:inline text-xs font-medium">
+              {copied ? 'Copied!' : 'Copy Link'}
+            </span>
           </Button>
 
+          {/* Theme Toggle */}
           <Button
             variant="outline"
             size="sm"
             onClick={toggleTheme}
-            className="flex items-center space-x-1 md:space-x-2 px-2 md:px-3"
+            className={cn(
+              "flex items-center space-x-2 px-3 py-2 h-8",
+              "hover:bg-gray-50 hover:border-gray-200 hover:text-gray-700",
+              "dark:hover:bg-gray-800 dark:hover:border-gray-700 dark:hover:text-gray-300",
+              "transition-all duration-200"
+            )}
           >
             {isDarkMode ? (
-              <Sun className="h-3 w-3 md:h-4 md:w-4" />
+              <Sun className="h-3 w-3" />
             ) : (
-              <Moon className="h-3 w-3 md:h-4 md:w-4" />
+              <Moon className="h-3 w-3" />
             )}
-            <span className="hidden sm:inline">{isDarkMode ? 'Light' : 'Dark'}</span>
+            <span className="hidden sm:inline text-xs font-medium">
+              {isDarkMode ? 'Light' : 'Dark'}
+            </span>
           </Button>
 
+          {/* Leave Room */}
           <Button
             variant="destructive"
             size="sm"
             onClick={onLeaveRoom}
-            className="flex items-center space-x-1 md:space-x-2 px-2 md:px-3"
+            className={cn(
+              "flex items-center space-x-2 px-3 py-2 h-8",
+              "hover:bg-red-600 hover:border-red-600",
+              "transition-all duration-200"
+            )}
           >
-            <LogOut className="h-3 w-3 md:h-4 md:w-4" />
-            <span className="hidden sm:inline">Leave Room</span>
-            <span className="sm:hidden">Leave</span>
+            <LogOut className="h-3 w-3" />
+            <span className="hidden sm:inline text-xs font-medium">Leave</span>
           </Button>
         </div>
       </div>

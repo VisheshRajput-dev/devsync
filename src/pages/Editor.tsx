@@ -7,9 +7,11 @@ import TopBar from '../components/TopBar';
 import UserList from '../components/UserList';
 import CodeEditor from '../components/CodeEditor';
 import ChatBox from '../components/ChatBox';
+import ChatUsersPanel from '../components/ChatUsersPanel';
 import FileTabs from '../components/FileTabs';
 import OutputPanel from '../components/OutputPanel';
 import UsernamePrompt from '../components/UsernamePrompt';
+import { Badge } from '@/components/ui/badge';
 import { Timestamp } from 'firebase/firestore';
 import type { User, Message, CodeFile } from '../types';
 
@@ -458,7 +460,7 @@ const Editor: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="w-full h-screen bg-background flex flex-col">
       {/* Top Bar */}
       <TopBar 
         roomId={roomId!} 
@@ -472,65 +474,88 @@ const Editor: React.FC = () => {
         isSaving={firebase.isLoading}
       />
 
-      {/* Main Content */}
-      <div className="flex h-[calc(100vh-4rem)]">
+      {/* Main Content - Full width with no margins */}
+      <div className="flex flex-1 min-h-0 w-full">
         {/* Mobile Layout - Stack vertically */}
-        <div className="flex flex-col md:hidden w-full">
+        <div className="flex flex-col md:hidden w-full p-2 gap-2">
           {/* Mobile Tabs */}
-          <div className="flex border-b bg-muted/30">
+          <div className="flex border-b bg-muted/30 rounded-t-lg">
             <button
-              className={`flex-1 px-4 py-2 text-sm font-medium ${
-                activeTab === 'editor' ? 'bg-background border-b-2 border-primary' : 'text-muted-foreground'
+              className={`flex-1 px-4 py-3 text-sm font-medium transition-all duration-200 ${
+                activeTab === 'editor' 
+                  ? 'bg-background border-b-2 border-primary text-foreground' 
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               }`}
               onClick={() => setActiveTab('editor')}
             >
-              Editor
+              <div className="flex items-center justify-center space-x-2">
+                <span>Editor</span>
+                {unsavedFiles.size > 0 && (
+                  <div className="w-2 h-2 bg-orange-500 rounded-full" />
+                )}
+              </div>
             </button>
             <button
-              className={`flex-1 px-4 py-2 text-sm font-medium ${
-                activeTab === 'chat' ? 'bg-background border-b-2 border-primary' : 'text-muted-foreground'
+              className={`flex-1 px-4 py-3 text-sm font-medium transition-all duration-200 ${
+                activeTab === 'chat' 
+                  ? 'bg-background border-b-2 border-primary text-foreground' 
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               }`}
               onClick={() => setActiveTab('chat')}
             >
-              Chat
+              <div className="flex items-center justify-center space-x-2">
+                <span>Chat</span>
+                {messages.length > 0 && (
+                  <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
+                    {messages.length}
+                  </Badge>
+                )}
+              </div>
             </button>
             <button
-              className={`flex-1 px-4 py-2 text-sm font-medium ${
-                activeTab === 'users' ? 'bg-background border-b-2 border-primary' : 'text-muted-foreground'
+              className={`flex-1 px-4 py-3 text-sm font-medium transition-all duration-200 ${
+                activeTab === 'users' 
+                  ? 'bg-background border-b-2 border-primary text-foreground' 
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               }`}
               onClick={() => setActiveTab('users')}
             >
-              Users ({users.length})
+              <div className="flex items-center justify-center space-x-2">
+                <span>Users</span>
+                <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
+                  {users.length}
+                </Badge>
+              </div>
             </button>
           </div>
 
-              {/* Mobile Content */}
-              <div className="flex-1 flex flex-col">
-                {activeTab === 'editor' && (
-                  <>
-                    <FileTabs
-                      files={files}
-                      activeFileId={activeFileId}
-                      onFileSelect={handleFileSelect}
-                      onFileCreate={handleFileCreate}
-                      onFileDelete={handleFileDelete}
-                      onFileRename={handleFileRename}
-                      unsavedFiles={unsavedFiles}
-                    />
-                    <div className="flex-1">
-                      <CodeEditor 
-                        code={currentCode} 
-                        onCodeChange={handleCodeChange}
-                        language={activeFile?.language || 'javascript'}
-                      />
-                    </div>
+          {/* Mobile Content */}
+          <div className="flex-1 flex flex-col bg-background rounded-lg border shadow-sm">
+            {activeTab === 'editor' && (
+              <>
+                <FileTabs
+                  files={files}
+                  activeFileId={activeFileId}
+                  onFileSelect={handleFileSelect}
+                  onFileCreate={handleFileCreate}
+                  onFileDelete={handleFileDelete}
+                  onFileRename={handleFileRename}
+                  unsavedFiles={unsavedFiles}
+                />
+                <div className="flex-1">
+              <CodeEditor 
+                    code={currentCode} 
+                onCodeChange={handleCodeChange}
+                    language={activeFile?.language || 'javascript'}
+                  />
+                </div>
                 <OutputPanel
                   isVisible={showOutputPanel}
                   onToggle={() => setShowOutputPanel(!showOutputPanel)}
                   onExecute={handleRunCode}
                   isExecuting={codeRunner.isExecuting}
                   result={codeRunner.result}
-                  className="h-48 border-t"
+                  className="border-t"
                 />
               </>
             )}
@@ -550,15 +575,10 @@ const Editor: React.FC = () => {
           </div>
         </div>
 
-        {/* Desktop Layout - Three columns */}
-        <div className="hidden md:flex w-full">
-          {/* Left Sidebar - User List */}
-          <div className="w-64 border-r bg-muted/30 shrink-0">
-            <UserList users={users} currentUsername={username} />
-          </div>
-
-          {/* Center - Code Editor */}
-          <div className="flex-1 flex flex-col">
+        {/* Desktop Layout - Two columns with bigger IDE */}
+        <div className="hidden md:flex w-full h-full">
+          {/* Main IDE Area - Takes most space */}
+          <div className="flex-1 flex flex-col min-w-0 bg-background border-r">
             <FileTabs
               files={files}
               activeFileId={activeFileId}
@@ -568,7 +588,7 @@ const Editor: React.FC = () => {
               onFileRename={handleFileRename}
               unsavedFiles={unsavedFiles}
             />
-            <div className="flex-1">
+            <div className="flex-1 min-h-0">
               <CodeEditor 
                 code={currentCode} 
                 onCodeChange={handleCodeChange}
@@ -581,16 +601,17 @@ const Editor: React.FC = () => {
               onExecute={handleRunCode}
               isExecuting={codeRunner.isExecuting}
               result={codeRunner.result}
-              className="h-48 border-t"
+              className="border-t"
             />
           </div>
 
-          {/* Right Sidebar - Chat */}
-          <div className="w-80 border-l bg-muted/30 shrink-0">
-            <ChatBox 
+          {/* Right Sidebar - Combined Chat/Users Panel */}
+          <div className="w-96 shrink-0 bg-muted/30">
+            <ChatUsersPanel 
               messages={messages}
-              onSendMessage={handleSendMessage}
+              users={users}
               currentUsername={username}
+              onSendMessage={handleSendMessage}
             />
           </div>
         </div>
@@ -600,3 +621,5 @@ const Editor: React.FC = () => {
 };
 
 export default Editor;
+
+

@@ -8,7 +8,7 @@ function App() {
   return (
     <SocketProvider>
       <Router>
-        <div className="min-h-screen bg-background">
+        <div className="w-full h-screen bg-background">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/room/:roomId" element={<Editor />} />
