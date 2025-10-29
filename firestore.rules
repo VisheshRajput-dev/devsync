@@ -1,0 +1,20 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow read/write access to rooms collection
+    match /rooms/{roomId} {
+      allow read, write: if true; // For development - allows all access
+      
+      // Allow read/write access to messages subcollection
+      match /messages/{messageId} {
+        allow read, write: if true; // For development - allows all access
+      }
+      
+      // Allow read/write access to files subcollection
+      match /files/{fileId} {
+        allow read, write: if true; // For development - allows all access
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "devsync-backend",
+  "version": "1.0.0",
+  "description": "Backend server for Devsync collaborative editor",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "build": "echo 'No build step required for Node.js'",
+    "test": "echo 'No tests specified'"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.4",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "keywords": ["collaborative", "editor", "realtime", "socket.io"],
+  "author": "",
+  "license": "MIT"
+}
+
