@@ -19,6 +19,9 @@ export interface CodeFile {
   language: string;
   isActive: boolean;
   createdAt?: number;
+  path?: string; // Folder path (e.g., "src/components", "utils")
+  isFolder?: boolean;
+  parentId?: string; // Parent folder ID
 }
 
 export interface RoomState {

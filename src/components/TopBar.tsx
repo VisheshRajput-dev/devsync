@@ -11,7 +11,8 @@ import {
   Save, 
   Download,
   Wifi,
-  Clock
+  Clock,
+  Code
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import devsyncLogo from '../assets/devsync-logo.png';
@@ -21,6 +22,7 @@ interface TopBarProps {
   userCount: number;
   onLeaveRoom: () => void;
   onRunCode?: () => void;
+  onFormatCode?: () => void;
   onSaveSession?: () => void;
   onLoadSession?: () => void;
   isExecuting?: boolean;
@@ -33,6 +35,7 @@ const TopBar: React.FC<TopBarProps> = ({
   userCount, 
   onLeaveRoom, 
   onRunCode,
+  onFormatCode,
   onSaveSession,
   onLoadSession,
   isExecuting = false,
@@ -116,6 +119,24 @@ const TopBar: React.FC<TopBarProps> = ({
 
         {/* Right side - Actions */}
         <div className="flex items-center space-x-2">
+          {/* Code Formatting */}
+          {onFormatCode && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onFormatCode}
+              className={cn(
+                "flex items-center space-x-2 px-3 py-2 h-8",
+                "hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-700",
+                "dark:hover:bg-indigo-950 dark:hover:border-indigo-800 dark:hover:text-indigo-300",
+                "transition-all duration-200"
+              )}
+            >
+              <Code className="h-3 w-3" />
+              <span className="hidden sm:inline text-xs font-medium">Format</span>
+            </Button>
+          )}
+
           {/* Code Execution */}
           {onRunCode && (
             <Button

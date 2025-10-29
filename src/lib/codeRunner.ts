@@ -1,9 +1,10 @@
-// Code execution utilities for JavaScript
+// Multi-language code execution utilities
 export interface ExecutionResult {
-  output: string[];
+  output: string;
   error: string | null;
   executionTime: number;
   success: boolean;
+  consoleMessages?: ConsoleMessage[];
 }
 
 export interface ConsoleMessage {
@@ -12,9 +13,19 @@ export interface ConsoleMessage {
   timestamp: number;
 }
 
+export type SupportedLanguage = 
+  | 'javascript' 
+  | 'typescript' 
+  | 'python' 
+  | 'html' 
+  | 'css'
+  | 'python';
+
 class CodeRunner {
   private output: ConsoleMessage[] = [];
   private isExecuting = false;
+  private pyodide: any = null;
+  private pyodideLoading = false;
 
   // Capture console methods
   private originalConsole = {
@@ -24,7 +35,49 @@ class CodeRunner {
     info: console.info,
   };
 
-  // Override console methods to capture output
+  // Initialize Pyodide for Python execution
+  async initializePyodide() {
+    if (this.pyodide) return this.pyodide;
+    if (this.pyodideLoading) {
+      // Wait for loading to complete
+      while (this.pyodideLoading) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return this.pyodide;
+    }
+
+    try {
+      this.pyodideLoading = true;
+      // Use CDN directly instead of npm package
+      // Load Pyodide from CDN
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+
+      // @ts-ignore - Pyodide is loaded from CDN
+      if (!window.loadPyodide) {
+        throw new Error('Pyodide not found after loading script');
+      }
+
+      // @ts-ignore
+      this.pyodide = await window.loadPyodide({
+        indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/',
+      });
+      this.pyodideLoading = false;
+      return this.pyodide;
+    } catch (error) {
+      console.error('Failed to load Pyodide:', error);
+      this.pyodideLoading = false;
+      // Return null instead of throwing, so we can show a better error message
+      return null;
+    }
+  }
+
+  // Setup console capture
   private setupConsoleCapture() {
     const addOutput = (type: ConsoleMessage['type']) => (...args: any[]) => {
       const message = args.map(arg => 
@@ -49,18 +102,8 @@ class CodeRunner {
     Object.assign(console, this.originalConsole);
   }
 
-  // Execute JavaScript code safely
-  async executeCode(code: string, timeoutMs: number = 5000): Promise<ExecutionResult> {
-    if (this.isExecuting) {
-      return {
-        output: [],
-        error: 'Code is already executing',
-        executionTime: 0,
-        success: false,
-      };
-    }
-
-    this.isExecuting = true;
+  // Execute JavaScript code
+  private async executeJavaScript(code: string, timeoutMs: number = 5000): Promise<ExecutionResult> {
     this.output = [];
     this.setupConsoleCapture();
 
@@ -70,21 +113,15 @@ class CodeRunner {
     let success = true;
 
     try {
-      // Create a timeout promise
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Execution timeout')), timeoutMs);
       });
 
-      // Create execution promise
       const executionPromise = new Promise((resolve, reject) => {
         try {
-          // Create a sandboxed execution environment
           const sandbox = this.createSandbox();
-          
-          // Execute the code
           const result = new Function(...Object.keys(sandbox), code)(...Object.values(sandbox));
           
-          // If it's a promise, wait for it
           if (result && typeof result.then === 'function') {
             result.then(resolve).catch(reject);
           } else {
@@ -95,7 +132,6 @@ class CodeRunner {
         }
       });
 
-      // Race between execution and timeout
       await Promise.race([executionPromise, timeoutPromise]);
       
     } catch (err) {
@@ -104,21 +140,256 @@ class CodeRunner {
     } finally {
       executionTime = Date.now() - startTime;
       this.restoreConsole();
-      this.isExecuting = false;
     }
 
+    const output = this.output.map(msg => {
+      const prefix = msg.type === 'error' ? '❌' : msg.type === 'warn' ? '⚠️' : '';
+      return `${prefix}${msg.message}`;
+    }).join('\n') || '(No output)';
+
     return {
-      output: this.output.map(msg => `[${msg.type.toUpperCase()}] ${msg.message}`),
+      output,
       error,
       executionTime,
       success,
+      consoleMessages: [...this.output],
     };
   }
 
-  // Create a sandboxed environment with limited APIs
+  // Execute TypeScript code (transpile to JavaScript first)
+  private async executeTypeScript(code: string, timeoutMs: number = 5000): Promise<ExecutionResult> {
+    try {
+      // Try to use TypeScript compiler
+      const ts = await import('typescript');
+      
+      // Transpile TypeScript to JavaScript
+      const result = ts.transpile(code, {
+        target: ts.ScriptTarget.ES2020,
+        module: ts.ModuleKind.ESNext,
+        esModuleInterop: true,
+        skipLibCheck: true,
+        jsx: ts.JsxEmit.React,
+      });
+      
+      // Execute the transpiled JavaScript
+      return await this.executeJavaScript(result, timeoutMs);
+    } catch (error) {
+      // Fallback: try executing as JavaScript (works for simple TS code)
+      console.warn('TypeScript compilation failed, attempting to run as JavaScript:', error);
+      try {
+        return await this.executeJavaScript(code, timeoutMs);
+      } catch (jsError) {
+        return {
+          output: '',
+          error: `TypeScript execution failed: ${error instanceof Error ? error.message : 'Unknown error'}. JavaScript fallback also failed.`,
+          executionTime: 0,
+          success: false,
+        };
+      }
+    }
+  }
+
+  // Execute Python code using Pyodide
+  private async executePython(code: string, timeoutMs: number = 10000): Promise<ExecutionResult> {
+    try {
+      const pyodide = await this.initializePyodide();
+      
+      if (!pyodide) {
+        return {
+          output: '',
+          error: 'Python execution requires Pyodide. Please ensure you have an internet connection and try again.',
+          executionTime: 0,
+          success: false,
+        };
+      }
+      
+      const startTime = Date.now();
+
+      // Set up stdout capture
+      let output = '';
+      pyodide.runPython(`
+        import sys
+        from io import StringIO
+        sys.stdout = StringIO()
+        sys.stderr = StringIO()
+      `);
+
+      // Execute the code
+      try {
+        pyodide.runPython(code);
+        const stdout = pyodide.runPython('sys.stdout.getvalue()');
+        const stderr = pyodide.runPython('sys.stderr.getvalue()');
+        
+        output = stdout || '';
+        const error = stderr || null;
+        
+        const executionTime = Date.now() - startTime;
+
+        return {
+          output: output || '(No output)',
+          error,
+          executionTime,
+          success: !error,
+        };
+      } catch (err: any) {
+        const stderr = pyodide.runPython('sys.stderr.getvalue()');
+        const executionTime = Date.now() - startTime;
+
+        return {
+          output: '',
+          error: stderr || (err?.message || String(err)),
+          executionTime,
+          success: false,
+        };
+      }
+    } catch (error) {
+      return {
+        output: '',
+        error: `Python execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        executionTime: 0,
+        success: false,
+      };
+    }
+  }
+
+  // Execute HTML code
+  private async executeHTML(code: string): Promise<ExecutionResult> {
+    const startTime = Date.now();
+    
+    return new Promise((resolve) => {
+      // Create a blob URL for the HTML
+      const blob = new Blob([code], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      
+      // Create iframe to render HTML
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = url;
+      
+      iframe.onload = () => {
+        const executionTime = Date.now() - startTime;
+        
+        // Get the rendered HTML
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+        const bodyContent = iframeDoc?.body?.innerHTML || '';
+        
+        URL.revokeObjectURL(url);
+        document.body.removeChild(iframe);
+        
+        resolve({
+          output: `HTML rendered successfully\n\nBody content preview:\n${bodyContent.substring(0, 200)}${bodyContent.length > 200 ? '...' : ''}`,
+          error: null,
+          executionTime,
+          success: true,
+        });
+      };
+      
+      iframe.onerror = () => {
+        const executionTime = Date.now() - startTime;
+        URL.revokeObjectURL(url);
+        document.body.removeChild(iframe);
+        
+        resolve({
+          output: '',
+          error: 'Failed to render HTML',
+          executionTime,
+          success: false,
+        });
+      };
+      
+      document.body.appendChild(iframe);
+    });
+  }
+
+  // Execute CSS code
+  private async executeCSS(code: string): Promise<ExecutionResult> {
+    const startTime = Date.now();
+    
+    return new Promise((resolve) => {
+      // Create a style element
+      const style = document.createElement('style');
+      style.textContent = code;
+      
+      // Create a test element to apply CSS
+      const testElement = document.createElement('div');
+      testElement.style.display = 'none';
+      testElement.innerHTML = '<div class="test-css">CSS Test</div>';
+      
+      document.head.appendChild(style);
+      document.body.appendChild(testElement);
+      
+      setTimeout(() => {
+        const executionTime = Date.now() - startTime;
+        
+        // Check computed styles
+        const computed = window.getComputedStyle(testElement.querySelector('.test-css')!);
+        const styles = Array.from(computed.cssText.split(';'))
+          .filter(s => s.trim())
+          .slice(0, 10)
+          .join('\n');
+        
+        document.head.removeChild(style);
+        document.body.removeChild(testElement);
+        
+        resolve({
+          output: `CSS parsed successfully\n\nComputed styles:\n${styles}`,
+          error: null,
+          executionTime,
+          success: true,
+        });
+      }, 100);
+    });
+  }
+
+  // Main execute method with language support
+  async executeCode(code: string, language: string, timeoutMs: number = 5000): Promise<ExecutionResult> {
+    if (this.isExecuting) {
+      return {
+        output: '',
+        error: 'Code is already executing',
+        executionTime: 0,
+        success: false,
+      };
+    }
+
+    this.isExecuting = true;
+
+    try {
+      switch (language.toLowerCase()) {
+        case 'javascript':
+        case 'js':
+          return await this.executeJavaScript(code, timeoutMs);
+          
+        case 'typescript':
+        case 'ts':
+          return await this.executeTypeScript(code, timeoutMs);
+          
+        case 'python':
+        case 'py':
+          return await this.executePython(code, timeoutMs * 2); // Python needs more time
+          
+        case 'html':
+          return await this.executeHTML(code);
+          
+        case 'css':
+          return await this.executeCSS(code);
+          
+        default:
+          return {
+            output: '',
+            error: `Language "${language}" is not supported for execution. Currently supported: JavaScript, TypeScript, Python, HTML, CSS.`,
+            executionTime: 0,
+            success: false,
+          };
+      }
+    } finally {
+      this.isExecuting = false;
+    }
+  }
+
+  // Create a sandboxed environment for JavaScript
   private createSandbox() {
     return {
-      // Basic JavaScript objects
       console: {
         log: (...args: any[]) => this.output.push({
           type: 'log',
@@ -141,68 +412,38 @@ class CodeRunner {
           timestamp: Date.now(),
         }),
       },
-      
-      // Math object
       Math,
-      
-      // Date object
       Date,
-      
-      // JSON object
       JSON,
-      
-      // Array constructor
       Array,
-      
-      // Object constructor
       Object,
-      
-      // String constructor
       String,
-      
-      // Number constructor
       Number,
-      
-      // Boolean constructor
       Boolean,
-      
-      // RegExp constructor
       RegExp,
-      
-      // Error constructor
       Error,
-      
-      // Promise constructor (limited)
       Promise: Promise,
-      
-      // setTimeout and setInterval (limited)
       setTimeout: (fn: Function, delay: number) => {
-        if (delay > 1000) delay = 1000; // Max 1 second
+        if (delay > 1000) delay = 1000;
         return setTimeout(fn, delay);
       },
-      
       setInterval: (fn: Function, delay: number) => {
-        if (delay > 1000) delay = 1000; // Max 1 second
+        if (delay > 1000) delay = 1000;
         return setInterval(fn, delay);
       },
-      
-      // Clear functions
       clearTimeout,
       clearInterval,
     };
   }
 
-  // Clear output buffer
   clearOutput() {
     this.output = [];
   }
 
-  // Get current output
   getOutput(): ConsoleMessage[] {
     return [...this.output];
   }
 
-  // Check if currently executing
   isCurrentlyExecuting(): boolean {
     return this.isExecuting;
   }
@@ -212,8 +453,8 @@ class CodeRunner {
 export const codeRunner = new CodeRunner();
 
 // Utility function to execute code
-export const executeCode = (code: string, timeoutMs?: number): Promise<ExecutionResult> => {
-  return codeRunner.executeCode(code, timeoutMs);
+export const executeCode = (code: string, language: string, timeoutMs?: number): Promise<ExecutionResult> => {
+  return codeRunner.executeCode(code, language, timeoutMs);
 };
 
 // Utility function to clear output

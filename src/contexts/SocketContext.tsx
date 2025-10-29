@@ -32,8 +32,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     // Only create socket once
     if (socketRef.current) return;
 
-    console.log('🔌 Creating socket connection to:', config.socketUrl);
-    
     const newSocket = io(config.socketUrl, {
       transports: ['polling', 'websocket'],
       timeout: 20000,
@@ -41,19 +39,14 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     });
 
     newSocket.on('connect', () => {
-      console.log('✅ Connected to server at:', config.socketUrl);
       setIsConnected(true);
     });
 
-    newSocket.on('disconnect', (reason) => {
-      console.log('❌ Disconnected from server:', reason);
+    newSocket.on('disconnect', () => {
       setIsConnected(false);
     });
 
-    newSocket.on('connect_error', (error) => {
-      console.error('❌ Connection error:', error);
-      console.error('❌ Error details:', error.message);
-      console.error('❌ Error type:', (error as any).type);
+    newSocket.on('connect_error', () => {
       setIsConnected(false);
     });
 
@@ -62,7 +55,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
     // Cleanup function
     return () => {
-      console.log('🔌 Cleaning up socket connection');
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -73,14 +65,12 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   }, []); // Empty dependency array - only run once
 
   const connect = useCallback(() => {
-    console.log('🔌 Manual connect called');
     if (socketRef.current && !socketRef.current.connected) {
       socketRef.current.connect();
     }
   }, []);
 
   const disconnect = useCallback(() => {
-    console.log('🔌 Manual disconnect called');
     if (socketRef.current) {
       socketRef.current.disconnect();
     }

@@ -7,7 +7,7 @@ export const useCodeRunner = () => {
   const [executionHistory, setExecutionHistory] = useState<ExecutionResult[]>([]);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const runCode = useCallback(async (code: string, timeoutMs: number = 5000) => {
+  const runCode = useCallback(async (code: string, language: string = 'javascript', timeoutMs: number = 5000) => {
     if (isExecuting) {
       console.warn('Code is already executing');
       return;
@@ -17,7 +17,7 @@ export const useCodeRunner = () => {
     setResult(null);
 
     try {
-      const executionResult = await executeCode(code, timeoutMs);
+      const executionResult = await executeCode(code, language, timeoutMs);
       setResult(executionResult);
       
       // Add to history
@@ -26,7 +26,7 @@ export const useCodeRunner = () => {
       return executionResult;
     } catch (error) {
       const errorResult: ExecutionResult = {
-        output: [],
+        output: '',
         error: error instanceof Error ? error.message : 'Unknown execution error',
         executionTime: 0,
         success: false,

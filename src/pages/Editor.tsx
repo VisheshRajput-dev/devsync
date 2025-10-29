@@ -1,25 +1,37 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
+import { useAlertDialog } from '../contexts/AlertDialogContext';
 import { useFirebase } from '../hooks/useFirebase';
 import { useCodeRunner } from '../hooks/useCodeRunner';
+import { 
+  codeChangeRateLimiter, 
+  chatMessageRateLimiter, 
+  fileOperationRateLimiter,
+  validateFileName,
+  validateFileContent,
+  validateFileSize
+} from '../lib/rateLimiter';
 import TopBar from '../components/TopBar';
 import UserList from '../components/UserList';
-import CodeEditor from '../components/CodeEditor';
+import CodeEditor, { type CodeEditorRef } from '../components/CodeEditor';
 import ChatBox from '../components/ChatBox';
 import ChatUsersPanel from '../components/ChatUsersPanel';
 import FileTabs from '../components/FileTabs';
 import OutputPanel from '../components/OutputPanel';
+import SyntaxErrorPanel from '../components/SyntaxErrorPanel';
 import UsernamePrompt from '../components/UsernamePrompt';
 import { Badge } from '@/components/ui/badge';
 import { Timestamp } from 'firebase/firestore';
 import type { User, Message, CodeFile } from '../types';
+import * as monaco from 'monaco-editor';
 
 const Editor: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const { socket, isConnected } = useSocket();
+  const { showAlert } = useAlertDialog();
   const firebase = useFirebase();
   const codeRunner = useCodeRunner();
   
@@ -42,6 +54,8 @@ const Editor: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'editor' | 'chat' | 'users'>('editor');
   const [showOutputPanel, setShowOutputPanel] = useState(false);
   const [unsavedFiles, setUnsavedFiles] = useState<Set<string>>(new Set());
+  const [syntaxErrors, setSyntaxErrors] = useState<monaco.editor.IMarker[]>([]);
+  const codeEditorRef = useRef<CodeEditorRef>(null);
   
   // Get current active file
   const activeFile = files.find(f => f.id === activeFileId) || files[0];
@@ -51,16 +65,12 @@ const Editor: React.FC = () => {
   useEffect(() => {
     if (!socket || !roomId || !username) return; // Don't initialize if no username
 
-    console.log('Initializing room:', roomId, 'for user:', username);
-    console.log('Socket connected:', isConnected);
+    // Room initialization
 
     // Wait for socket to be connected before joining room
     if (!isConnected) {
-      console.log('Socket not connected, waiting...');
       const connectHandler = () => {
-        console.log('Socket connected, joining room...');
         socket.emit('joinRoom', { roomId, username });
-        console.log('Emitted joinRoom event');
         socket.off('connect', connectHandler);
       };
       socket.on('connect', connectHandler);
@@ -69,20 +79,14 @@ const Editor: React.FC = () => {
 
     // Join the room
     socket.emit('joinRoom', { roomId, username });
-    console.log('Emitted joinRoom event');
 
     // Listen for room joined event
     const handleRoomJoined = (data: any) => {
-      console.log('🎉 Room joined successfully:', data);
-      console.log('🎉 Setting users:', data.users);
-      console.log('🎉 Setting loading to false');
-      
       setUsers(data.users);
       setIsLoading(false);
       
       // Update default file with server code if it's the welcome message
       if (data.code && data.code !== '// Welcome to Devsync!\n// Start coding together...\n') {
-        console.log('🎉 Updating file content with server code');
         setFiles(prev => prev.map(f => 
           f.id === 'default' ? { ...f, content: data.code } : f
         ));
@@ -91,19 +95,16 @@ const Editor: React.FC = () => {
 
     // Listen for user joined event
     const handleUserJoined = (data: any) => {
-      console.log('User joined:', data.username);
       setUsers(data.users);
     };
 
     // Listen for user left event
     const handleUserLeft = (data: any) => {
-      console.log('User left:', data.username);
       setUsers(data.users);
     };
 
     // Listen for code changes
     const handleCodeChange = (data: any) => {
-      console.log('Code change received:', data.code?.substring(0, 50) + '...', 'for file:', data.fileId);
       setFiles(prev => prev.map(f => 
         f.id === (data.fileId || 'default') ? { ...f, content: data.code } : f
       ));
@@ -116,21 +117,36 @@ const Editor: React.FC = () => {
 
     // Listen for file creation
     const handleFileCreated = (data: any) => {
-      console.log('File created:', data.file.name);
       setFiles(prev => {
         // Check if file already exists to prevent duplicates
-        const exists = prev.some(f => f.id === data.file.id);
-        if (exists) {
-          console.log('File already exists, skipping duplicate');
+        // Check by both ID and name+content to be extra safe
+        const existsById = prev.some(f => f.id === data.file.id);
+        const existsByNameAndContent = prev.some(f => 
+          f.name === data.file.name && 
+          f.content === data.file.content &&
+          f.language === data.file.language
+        );
+        
+        if (existsById || existsByNameAndContent) {
           return prev;
         }
         
+        // Ensure file has all required properties
+        const fileToAdd: CodeFile = {
+          id: data.file.id,
+          name: data.file.name || 'Untitled',
+          content: data.file.content || '',
+          language: data.file.language || 'plaintext',
+          isActive: false,
+          createdAt: data.file.createdAt || Date.now()
+        };
+        
         // Add the new file
-        const newFiles = [...prev, data.file];
+        const newFiles = [...prev, fileToAdd];
         
         // If this is the creator, set it as active
         if (data.file.createdBy === username) {
-          setActiveFileId(data.file.id);
+          setActiveFileId(fileToAdd.id);
         }
         
         return newFiles;
@@ -139,7 +155,6 @@ const Editor: React.FC = () => {
 
     // Listen for file deletion
     const handleFileDeleted = (data: any) => {
-      console.log('File deleted by another user:', data.fileId);
       setFiles(prev => {
         const newFiles = prev.filter(f => f.id !== data.fileId);
         
@@ -154,7 +169,6 @@ const Editor: React.FC = () => {
 
     // Listen for file rename
     const handleFileRenamed = (data: any) => {
-      console.log('File renamed by another user:', data.fileId, 'to', data.newName);
       setFiles(prev => prev.map(f => 
         f.id === data.fileId ? { ...f, name: data.newName } : f
       ));
@@ -162,12 +176,10 @@ const Editor: React.FC = () => {
 
     // Listen for errors
     const handleError = (data: any) => {
-      console.error('Socket error:', data.message);
-      alert(`Error: ${data.message}`);
+      showAlert('Error', data.message || 'An unknown error occurred');
     };
 
     // Add event listeners (remove existing ones first to prevent duplicates)
-    console.log('🔗 Adding socket event listeners...');
     socket.off('roomJoined', handleRoomJoined);
     socket.off('userJoined', handleUserJoined);
     socket.off('userLeft', handleUserLeft);
@@ -187,11 +199,9 @@ const Editor: React.FC = () => {
     socket.on('fileDeleted', handleFileDeleted);
     socket.on('fileRenamed', handleFileRenamed);
     socket.on('error', handleError);
-    console.log('🔗 Socket event listeners added');
 
     // Fallback timeout in case roomJoined never comes
     const timeoutId = setTimeout(() => {
-      console.warn('Room join timeout - forcing loading to false');
       setIsLoading(false);
     }, 5000);
 
@@ -210,8 +220,15 @@ const Editor: React.FC = () => {
     };
   }, [socket, roomId, username, isConnected]); // Added username dependency
 
-  // Handle code changes
+  // Handle code changes with rate limiting
   const handleCodeChange = useCallback((newCode: string) => {
+    const userId = socket?.id || 'anonymous';
+    
+    // Rate limiting for code changes
+    if (!codeChangeRateLimiter.isAllowed(userId)) {
+      return;
+    }
+    
     setFiles(prev => prev.map(f => 
       f.id === activeFileId ? { ...f, content: newCode } : f
     ));
@@ -219,19 +236,46 @@ const Editor: React.FC = () => {
     // Mark file as unsaved
     setUnsavedFiles(prev => new Set(prev).add(activeFileId));
     
+    // Update syntax errors after a short delay
+    setTimeout(() => {
+      if (codeEditorRef.current) {
+        const errors = codeEditorRef.current.getErrors();
+        setSyntaxErrors(errors);
+      }
+    }, 300);
+    
     // Emit to other users with fileId
     if (socket && roomId) {
       socket.emit('sendCodeChange', { roomId, code: newCode, fileId: activeFileId });
     }
   }, [activeFileId, socket, roomId]);
 
-  // Handle send message
+  // Update errors when file changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (codeEditorRef.current) {
+        const errors = codeEditorRef.current.getErrors();
+        setSyntaxErrors(errors);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [activeFileId, currentCode]);
+
+  // Handle send message with rate limiting
   const handleSendMessage = useCallback((message: string) => {
+    const userId = socket?.id || 'anonymous';
+    
+    // Rate limiting for chat messages
+    if (!chatMessageRateLimiter.isAllowed(userId)) {
+      showAlert('Rate Limit', 'Too many messages. Please wait a moment.');
+      return;
+    }
+    
     if (socket && roomId && message.trim()) {
       // Only emit to server, don't add locally (server will broadcast back)
       socket.emit('sendChatMessage', { roomId, message: message.trim() });
     }
-  }, [socket, roomId]);
+  }, [socket, roomId, showAlert]);
 
   // File management functions
   const handleFileSelect = useCallback((fileId: string) => {
@@ -262,9 +306,9 @@ const Editor: React.FC = () => {
         language: newFile.language,
         isActive: true
       });
-    } catch (error) {
-      console.error('Error creating file:', error);
-    }
+      } catch (error) {
+        // Error handled - operation continues
+      }
   }, [roomId, firebase, socket]);
 
   const handleFileDelete = useCallback((fileId: string) => {
@@ -286,9 +330,9 @@ const Editor: React.FC = () => {
     // Delete from Firebase
     try {
       firebase.deleteFile(roomId!, fileId);
-    } catch (error) {
-      console.error('Error deleting file:', error);
-    }
+        } catch (error) {
+          // Error handled - operation continues
+        }
   }, [files.length, activeFileId, socket, roomId, firebase]);
 
   const handleFileRename = useCallback((fileId: string, newName: string) => {
@@ -305,18 +349,198 @@ const Editor: React.FC = () => {
     try {
       firebase.renameFile(roomId!, fileId, newName);
     } catch (error) {
-      console.error('Error renaming file:', error);
+      // Error handled - operation continues
     }
   }, [socket, roomId, firebase]);
 
+  // File upload handler with rate limiting and validation
+  const handleFileUpload = useCallback(async (files: FileList) => {
+    const userId = socket?.id || 'anonymous';
+    
+    // Check rate limit
+    if (!fileOperationRateLimiter.isAllowed(userId)) {
+      showAlert('Rate Limit', 'Too many file operations. Please wait a moment.');
+      return;
+    }
+
+    const uploadedFiles: CodeFile[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      
+      // Validate file size
+      const sizeValidation = validateFileSize(file.size);
+      if (!sizeValidation.valid) {
+        showAlert('Upload Error', `File ${file.name}: ${sizeValidation.error}`);
+        continue;
+      }
+
+      // Validate file name
+      const nameValidation = validateFileName(file.name);
+      if (!nameValidation.valid) {
+        showAlert('Upload Error', `File ${file.name}: ${nameValidation.error}`);
+        continue;
+      }
+
+      try {
+        const content = await file.text();
+        
+        // Validate content
+        const contentValidation = validateFileContent(content, file.name);
+        if (!contentValidation.valid) {
+          showAlert('Upload Error', `File ${file.name}: ${contentValidation.error}`);
+          continue;
+        }
+        
+        const extension = file.name.split('.').pop()?.toLowerCase() || '';
+        
+        // Determine language from extension
+        const languageMap: Record<string, string> = {
+          'js': 'javascript',
+          'jsx': 'javascript',
+          'ts': 'typescript',
+          'tsx': 'typescript',
+          'html': 'html',
+          'htm': 'html',
+          'css': 'css',
+          'scss': 'css',
+          'sass': 'css',
+          'json': 'json',
+          'py': 'python',
+          'java': 'java',
+          'cpp': 'cpp',
+          'c': 'c',
+          'h': 'c',
+          'cs': 'csharp',
+          'md': 'markdown',
+          'txt': 'plaintext',
+          'xml': 'xml',
+          'yaml': 'yaml',
+          'yml': 'yaml',
+          'sql': 'sql',
+          'sh': 'shell',
+          'bash': 'shell',
+          'zsh': 'shell',
+          'ps1': 'powershell',
+          'dockerfile': 'dockerfile',
+          'go': 'go',
+          'rs': 'rust',
+          'rb': 'ruby',
+          'php': 'php',
+        };
+        
+        const language = languageMap[extension] || 'plaintext';
+        
+        // Generate unique ID with timestamp and random number to avoid collisions
+        const uniqueId = `file_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${i}`;
+        
+        const newFile: CodeFile = {
+          id: uniqueId,
+          name: file.name,
+          content,
+          language,
+          isActive: false,
+          createdAt: Date.now()
+        };
+        
+        uploadedFiles.push(newFile);
+        
+        // Broadcast to all users (including self via socket event)
+        // Don't add to local state here - wait for socket event to avoid duplicates
+        if (socket && roomId) {
+          socket.emit('createFile', { roomId, file: newFile });
+        }
+        
+        // Save to Firebase
+        try {
+          await firebase.createFile(roomId!, {
+            name: newFile.name,
+            content: newFile.content,
+            language: newFile.language,
+            isActive: false
+          });
+        } catch (error) {
+          // Error handled silently - file will still be synced via socket
+        }
+      } catch (error) {
+        showAlert('Upload Error', `Failed to read file ${file.name}`);
+      }
+    }
+
+    if (uploadedFiles.length > 0) {
+      // Don't add to state here - the socket event will handle it
+      // This prevents duplicates since the socket event will be received by all users including uploader
+      showAlert('Upload Success', `Successfully uploaded ${uploadedFiles.length} file(s). Files will appear shortly.`);
+    }
+  }, [socket, roomId, firebase]);
+
+  // File download handler - single file
+  const handleFileDownload = useCallback((fileId: string) => {
+    const file = files.find(f => f.id === fileId);
+    if (!file) return;
+
+    const blob = new Blob([file.content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [files]);
+
+  // File download handler - ZIP all files
+  const handleDownloadAll = useCallback(async () => {
+    if (files.length === 0) {
+      showAlert('Download Error', 'No files to download');
+      return;
+    }
+
+    try {
+      // Dynamic import of JSZip
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+
+      // Add all files to ZIP
+      files.forEach(file => {
+        zip.file(file.name, file.content);
+      });
+
+      // Generate ZIP file
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `devsync-${roomId?.slice(0, 8)}-${Date.now()}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      showAlert('Download Error', 'Failed to create ZIP file. Make sure JSZip is installed.');
+    }
+  }, [files, roomId, showAlert]);
+
+  // Code formatting
+  const handleFormatCode = useCallback(async () => {
+    if (codeEditorRef.current) {
+      await codeEditorRef.current.formatCode();
+    }
+  }, []);
+
   // Code execution
   const handleRunCode = useCallback(async () => {
-    if (activeFile?.language === 'javascript') {
-      await codeRunner.runCode(currentCode);
+    if (!activeFile) return;
+    
+    const supportedLanguages = ['javascript', 'typescript', 'python', 'html', 'css'];
+    
+    if (supportedLanguages.includes(activeFile.language.toLowerCase())) {
+      await codeRunner.runCode(currentCode, activeFile.language);
     } else {
-      alert('Code execution is only supported for JavaScript files');
+      showAlert('Execution Error', `Code execution is not supported for ${activeFile.language} files. Currently supported: JavaScript, TypeScript, Python, HTML, CSS.`);
     }
-  }, [activeFile?.language, currentCode, codeRunner]);
+  }, [activeFile, currentCode, codeRunner, showAlert]);
 
   // Session management
   const handleSaveSession = useCallback(async () => {
@@ -349,10 +573,9 @@ const Editor: React.FC = () => {
       });
       
       setUnsavedFiles(new Set());
-      alert('Session saved successfully!');
+      showAlert('Success', 'Session saved successfully!');
     } catch (error) {
-      console.error('Error saving session:', error);
-      alert(`Failed to save session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showAlert('Save Error', `Failed to save session: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }, [roomId, firebase, currentCode, activeFile?.language, activeFileId, files, messages, users]);
 
@@ -393,15 +616,14 @@ const Editor: React.FC = () => {
         }
         
         setUnsavedFiles(new Set());
-        alert('Session loaded successfully!');
+        showAlert('Success', 'Session loaded successfully!');
       } else {
-        alert('No saved session found for this room.');
+        showAlert('Load Error', 'No saved session found for this room.');
       }
     } catch (error) {
-      console.error('Error loading session:', error);
-      alert(`Failed to load session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showAlert('Load Error', `Failed to load session: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-  }, [roomId, firebase]);
+  }, [roomId, firebase, showAlert]);
 
   const handleUsernameSubmit = (newUsername: string) => {
     setUsername(newUsername);
@@ -466,13 +688,14 @@ const Editor: React.FC = () => {
         roomId={roomId!} 
         userCount={users.length}
         onLeaveRoom={handleLeaveRoom}
-        onRunCode={handleRunCode}
-        onSaveSession={handleSaveSession}
-        onLoadSession={handleLoadSession}
-        isExecuting={codeRunner.isExecuting}
-        lastSaved={firebase.lastSaved}
-        isSaving={firebase.isLoading}
-      />
+         onFormatCode={handleFormatCode}
+         onRunCode={handleRunCode}
+         onSaveSession={handleSaveSession}
+         onLoadSession={handleLoadSession}
+         isExecuting={codeRunner.isExecuting}
+         lastSaved={firebase.lastSaved}
+         isSaving={firebase.isLoading}
+       />
 
       {/* Main Content - Full width with no margins */}
       <div className="flex flex-1 min-h-0 w-full">
@@ -540,15 +763,27 @@ const Editor: React.FC = () => {
                   onFileCreate={handleFileCreate}
                   onFileDelete={handleFileDelete}
                   onFileRename={handleFileRename}
+                  onFileUpload={handleFileUpload}
+                  onFileDownload={handleFileDownload}
+                  onDownloadAll={handleDownloadAll}
                   unsavedFiles={unsavedFiles}
                 />
-                <div className="flex-1">
+          <div className="flex-1">
               <CodeEditor 
-                    code={currentCode} 
+                     ref={codeEditorRef}
+                     code={currentCode} 
                 onCodeChange={handleCodeChange}
-                    language={activeFile?.language || 'javascript'}
-                  />
-                </div>
+                     language={activeFile?.language || 'javascript'}
+                   />
+                 </div>
+                 {syntaxErrors.length > 0 && (
+                   <SyntaxErrorPanel 
+                     errors={syntaxErrors}
+                     onErrorClick={(error) => {
+                       // Could scroll to error line in editor
+                     }}
+                   />
+                 )}
                 <OutputPanel
                   isVisible={showOutputPanel}
                   onToggle={() => setShowOutputPanel(!showOutputPanel)}
@@ -586,15 +821,28 @@ const Editor: React.FC = () => {
               onFileCreate={handleFileCreate}
               onFileDelete={handleFileDelete}
               onFileRename={handleFileRename}
+              onFileUpload={handleFileUpload}
+              onFileDownload={handleFileDownload}
+              onDownloadAll={handleDownloadAll}
               unsavedFiles={unsavedFiles}
             />
-            <div className="flex-1 min-h-0">
-              <CodeEditor 
-                code={currentCode} 
-                onCodeChange={handleCodeChange}
-                language={activeFile?.language || 'javascript'}
-              />
-            </div>
+             <div className="flex-1 min-h-0">
+            <CodeEditor 
+                 ref={codeEditorRef}
+                 code={currentCode} 
+              onCodeChange={handleCodeChange}
+                 language={activeFile?.language || 'javascript'}
+               />
+             </div>
+             {syntaxErrors.length > 0 && (
+               <SyntaxErrorPanel 
+                 errors={syntaxErrors}
+                 onErrorClick={(error) => {
+                   // Could scroll to error line in editor
+                   console.log('Error clicked:', error);
+                 }}
+               />
+             )}
             <OutputPanel
               isVisible={showOutputPanel}
               onToggle={() => setShowOutputPanel(!showOutputPanel)}

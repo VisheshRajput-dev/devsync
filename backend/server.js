@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { codeChangeRateLimiter, chatMessageRateLimiter, fileOperationRateLimiter } from './rateLimiter.js';
 
 dotenv.config();
 
@@ -15,7 +16,7 @@ const io = new Server(server, {
   }
 });
 
-console.log('🌐 CORS enabled for:', process.env.CORS_ORIGIN || ["http://localhost:5174", "http://localhost:5175", "http://localhost:5176"]);
+// CORS configuration loaded
 
 const PORT = process.env.PORT || 3002;
 
@@ -35,15 +36,12 @@ const rooms = new Map();
 
 // Socket.io connection handling
 io.on('connection', (socket) => {
-  console.log('🔌 User connected:', socket.id);
+  // User connected
 
   // User joins a room
   socket.on('joinRoom', ({ roomId, username }) => {
-    console.log(`📥 Received joinRoom event from ${socket.id}:`, { roomId, username });
-    
     try {
       if (!roomId || !username) {
-        console.log('❌ Missing roomId or username');
         socket.emit('error', { message: 'Missing roomId or username' });
         return;
       }
@@ -55,14 +53,12 @@ io.on('connection', (socket) => {
           code: '// Welcome to Devsync!\n// Start coding together...\n',
           messages: []
         });
-        console.log(`🏠 Created new room: ${roomId}`);
       }
 
       const room = rooms.get(roomId);
       
       // Check if user is already in the room
       if (room.users.has(socket.id)) {
-        console.log(`⚠️ User ${username} already in room ${roomId}, skipping join`);
         return;
       }
       
@@ -76,8 +72,6 @@ io.on('connection', (socket) => {
         users: Array.from(room.users.values())
       };
 
-      console.log(`📤 Sending roomJoined to ${socket.id}:`, roomData);
-
       // Send current room state to the joining user
       socket.emit('roomJoined', roomData);
 
@@ -87,16 +81,21 @@ io.on('connection', (socket) => {
         id: socket.id,
         users: Array.from(room.users.values())
       });
-
-      console.log(`✅ ${username} joined room ${roomId} (${room.users.size} users total)`);
     } catch (error) {
-      console.error('❌ Error joining room:', error);
       socket.emit('error', { message: 'Failed to join room' });
     }
   });
 
-  // Handle code changes
+  // Handle code changes with rate limiting
   socket.on('sendCodeChange', ({ roomId, code, fileId }) => {
+    const userId = socket.id;
+    
+    // Rate limiting
+    if (!codeChangeRateLimiter.isAllowed(userId)) {
+      socket.emit('error', { message: 'Rate limit exceeded. Please slow down.' });
+      return;
+    }
+    
     try {
       const room = rooms.get(roomId);
       if (room) {
@@ -114,12 +113,20 @@ io.on('connection', (socket) => {
         socket.to(roomId).emit('codeChange', { code, fileId });
       }
     } catch (error) {
-      console.error('Error handling code change:', error);
+      // Error handled silently
     }
   });
 
-  // Handle file creation
+  // Handle file creation with rate limiting
   socket.on('createFile', ({ roomId, file }) => {
+    const userId = socket.id;
+    
+    // Rate limiting
+    if (!fileOperationRateLimiter.isAllowed(userId)) {
+      socket.emit('error', { message: 'Too many file operations. Please wait a moment.' });
+      return;
+    }
+    
     try {
       const room = rooms.get(roomId);
       if (room) {
@@ -132,14 +139,19 @@ io.on('connection', (socket) => {
           createdBy: user ? user.username : 'Unknown'
         };
         
+        // Check if file already exists
+        if (room.files.has(file.id)) {
+          return;
+        }
+        
         room.files.set(file.id, fileWithCreator);
         
-        // Broadcast to all users in the room
+        // Broadcast to ALL users in the room (including the uploader)
+        // This ensures consistent behavior for all users
         io.to(roomId).emit('fileCreated', { file: fileWithCreator });
-        console.log(`📁 File created: ${file.name} by ${fileWithCreator.createdBy} in room ${roomId}`);
       }
     } catch (error) {
-      console.error('Error handling file creation:', error);
+      // Error handled silently
     }
   });
 
@@ -152,10 +164,9 @@ io.on('connection', (socket) => {
         
         // Broadcast to all users in the room
         io.to(roomId).emit('fileDeleted', { fileId });
-        console.log(`🗑️ File deleted: ${fileId} in room ${roomId}`);
       }
     } catch (error) {
-      console.error('Error handling file deletion:', error);
+      // Error handled silently
     }
   });
 
@@ -171,16 +182,45 @@ io.on('connection', (socket) => {
           
           // Broadcast to all users in the room
           io.to(roomId).emit('fileRenamed', { fileId, newName });
-          console.log(`📝 File renamed: ${fileId} to ${newName} in room ${roomId}`);
         }
       }
     } catch (error) {
-      console.error('Error handling file rename:', error);
+      // Error handled silently
     }
   });
 
-  // Handle chat messages
+  // Handle selection/cursor changes
+  socket.on('sendSelection', ({ roomId, selection, cursor, fileId }) => {
+    try {
+      const room = rooms.get(roomId);
+      if (room) {
+        const user = room.users.get(socket.id);
+        if (user) {
+          // Broadcast selection to other users in the room
+          socket.to(roomId).emit('selectionChange', {
+            userId: socket.id,
+            username: user.username,
+            selection,
+            cursor,
+            fileId
+          });
+        }
+      }
+    } catch (error) {
+      // Error handled silently
+    }
+  });
+
+  // Handle chat messages with rate limiting
   socket.on('sendChatMessage', ({ roomId, message }) => {
+    const userId = socket.id;
+    
+    // Rate limiting
+    if (!chatMessageRateLimiter.isAllowed(userId)) {
+      socket.emit('error', { message: 'Too many messages. Please wait a moment.' });
+      return;
+    }
+    
     try {
       const room = rooms.get(roomId);
       if (room) {
@@ -200,14 +240,12 @@ io.on('connection', (socket) => {
         }
       }
     } catch (error) {
-      console.error('Error handling chat message:', error);
+      // Error handled silently
     }
   });
 
   // Handle user disconnect
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-    
     // Find and remove user from all rooms
     for (const [roomId, room] of rooms.entries()) {
       if (room.users.has(socket.id)) {
@@ -224,7 +262,6 @@ io.on('connection', (socket) => {
         // Clean up empty rooms
         if (room.users.size === 0) {
           rooms.delete(roomId);
-          console.log(`Room ${roomId} deleted (no users)`);
         }
         
         break;
