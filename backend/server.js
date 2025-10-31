@@ -9,9 +9,23 @@ dotenv.config();
 
 const app = express();
 const server = createServer(app);
+
+// Parse CORS_ORIGIN - handle comma-separated string or array
+const getCorsOrigins = () => {
+  const corsOrigin = process.env.CORS_ORIGIN;
+  if (!corsOrigin) {
+    return ["http://localhost:5174", "http://localhost:5175", "http://localhost:5176"];
+  }
+  // If it's a comma-separated string, split it and trim each origin
+  if (typeof corsOrigin === 'string' && corsOrigin.includes(',')) {
+    return corsOrigin.split(',').map(origin => origin.trim()).filter(Boolean);
+  }
+  return corsOrigin;
+};
+
 const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN || ["http://localhost:5174", "http://localhost:5175", "http://localhost:5176"],
+    origin: getCorsOrigins(),
     methods: ["GET", "POST"]
   }
 });

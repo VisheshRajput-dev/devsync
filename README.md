@@ -264,25 +264,30 @@ devsync/
 
 ## 🚀 Deployment
 
+> **📖 For detailed step-by-step deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md)**
+
+### Quick Deploy: Railway (Backend) + Vercel (Frontend)
+
+This project is configured for easy deployment:
+- **Backend → Railway**: Real-time Socket.io server
+- **Frontend → Vercel**: React/Vite application
+
 ### Backend Deployment
 
-#### Option 1: Railway
+#### Option 1: Railway (Recommended)
 
-1. **Install Railway CLI** (optional):
-   ```bash
-   npm i -g @railway/cli
-   ```
+1. **Create Railway Project**:
+   - Go to [Railway Dashboard](https://railway.app/dashboard)
+   - Click "New Project" → "Deploy from GitHub repo"
+   - Select your repository
 
-2. **Deploy**:
-   ```bash
-   cd backend
-   railway init
-   railway up
-   ```
+2. **Configure Service**:
+   - Set **Root Directory** to `backend` in service settings
+   - Railway will auto-detect Node.js
 
-3. **Set Environment Variables** in Railway dashboard:
-   - `PORT` = 3002 (or your preferred port)
-   - `CORS_ORIGIN` = your frontend domain(s)
+3. **Set Environment Variables** in Railway:
+   - `PORT` = 3002 (Railway may auto-set this)
+   - `CORS_ORIGIN` = `https://your-frontend.vercel.app` (set after frontend deploy)
 
 #### Option 2: Render
 
@@ -377,18 +382,19 @@ devsync/
 
 #### Option 1: Vercel (Recommended)
 
-1. **Install Vercel CLI**:
-   ```bash
-   npm i -g vercel
-   ```
+1. **Create Vercel Project**:
+   - Go to [Vercel Dashboard](https://vercel.com/dashboard)
+   - Click "Add New..." → "Project"
+   - Import your GitHub repository
 
-2. **Deploy**:
-   ```bash
-   vercel
-   ```
+2. **Configure Build** (auto-detected from `vercel.json`):
+   - Framework: Vite
+   - Build Command: `npm run build`
+   - Output Directory: `dist`
 
-3. **Set Environment Variables** in Vercel dashboard:
-   - `VITE_SOCKET_URL` = your backend URL
+3. **Set Environment Variables** in Vercel:
+   - `VITE_SOCKET_URL` = `https://your-backend.up.railway.app`
+   - (Optional) Firebase config variables if using session persistence
 
 4. **Custom Domain** (optional):
    - Add domain in Vercel dashboard
