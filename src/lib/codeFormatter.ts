@@ -32,7 +32,7 @@ export const formatCode = async (
         });
         
         // Fallback: Use language service formatting
-        const formatted = formatWithLanguageService(model, languageId);
+        const formatted = formatWithLanguageService(model);
         if (formatted !== code) {
           model.setValue(formatted);
         }
@@ -72,7 +72,7 @@ const getMonacoLanguageId = (language: string): string => {
 };
 
 // Format using Monaco's language service
-const formatWithLanguageService = (model: any, languageId: string): string => {
+const formatWithLanguageService = (model: any): string => {
   // For now, return original code
   // Monaco's formatting is handled by the editor
   return model.getValue();

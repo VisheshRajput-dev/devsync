@@ -13,9 +13,9 @@ import {
   type FileData,
   type SavedMessage
 } from '../lib/firestore';
-import { doc, deleteDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../lib/firebase';
-import type { Message, File } from '../types';
+import type { Message } from '../types';
 
 export const useFirebase = () => {
   const [isLoading, setIsLoading] = useState(false);

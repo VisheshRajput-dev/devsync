@@ -14,12 +14,6 @@ const Home: React.FC = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
 
-  // Generate a random username if not provided
-  const generateGuestUsername = () => {
-    const randomNum = Math.floor(Math.random() * 10000);
-    return `Guest_${randomNum}`;
-  };
-
   const handleCreateRoom = async () => {
     if (!username.trim()) {
       alert('Please enter your username');

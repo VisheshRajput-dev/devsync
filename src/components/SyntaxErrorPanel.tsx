@@ -21,28 +21,6 @@ const SyntaxErrorPanel: React.FC<SyntaxErrorPanelProps> = ({
     return null;
   }
 
-  const errorsBySeverity = {
-    error: errors.filter(e => e.severity === monaco.MarkerSeverity.Error),
-    warning: errors.filter(e => e.severity === monaco.MarkerSeverity.Warning),
-    info: errors.filter(e => e.severity === monaco.MarkerSeverity.Info),
-    hint: errors.filter(e => e.severity === monaco.MarkerSeverity.Hint),
-  };
-
-  const getSeverityColor = (severity: number) => {
-    switch (severity) {
-      case monaco.MarkerSeverity.Error:
-        return 'text-red-600 dark:text-red-400';
-      case monaco.MarkerSeverity.Warning:
-        return 'text-yellow-600 dark:text-yellow-400';
-      case monaco.MarkerSeverity.Info:
-        return 'text-blue-600 dark:text-blue-400';
-      case monaco.MarkerSeverity.Hint:
-        return 'text-gray-600 dark:text-gray-400';
-      default:
-        return 'text-gray-600 dark:text-gray-400';
-    }
-  };
-
   const getSeverityLabel = (severity: number) => {
     switch (severity) {
       case monaco.MarkerSeverity.Error:

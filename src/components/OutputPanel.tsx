@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { ScrollArea } from './ui/scroll-area';
@@ -20,7 +20,7 @@ import {
   MessageCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { ExecutionResult, ConsoleMessage } from '../lib/codeRunner';
+import type { ExecutionResult } from '../lib/codeRunner';
 
 interface OutputPanelProps {
   isVisible: boolean;
@@ -39,7 +39,6 @@ const OutputPanel: React.FC<OutputPanelProps> = ({
   result,
   className = '',
 }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
 
   const getStatusIcon = () => {
@@ -207,7 +206,7 @@ const OutputPanel: React.FC<OutputPanelProps> = ({
       <CardContent className="p-0">
         <div className={cn(
           "transition-all duration-300",
-          isCollapsed ? "max-h-0 overflow-hidden" : "max-h-96"
+          "max-h-96"
         )}>
           <ScrollArea className="h-48">
             <div className="p-4">

@@ -779,7 +779,7 @@ const Editor: React.FC = () => {
                  {syntaxErrors.length > 0 && (
                    <SyntaxErrorPanel 
                      errors={syntaxErrors}
-                     onErrorClick={(error) => {
+                     onErrorClick={() => {
                        // Could scroll to error line in editor
                      }}
                    />

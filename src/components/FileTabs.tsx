@@ -9,7 +9,6 @@ import {
   FileImage,
   File,
   Edit3,
-  Save,
   AlertCircle,
   Upload,
   Download,

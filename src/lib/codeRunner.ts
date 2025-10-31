@@ -190,7 +190,7 @@ class CodeRunner {
   }
 
   // Execute Python code using Pyodide
-  private async executePython(code: string, timeoutMs: number = 10000): Promise<ExecutionResult> {
+  private async executePython(code: string): Promise<ExecutionResult> {
     try {
       const pyodide = await this.initializePyodide();
       
@@ -366,7 +366,7 @@ class CodeRunner {
           
         case 'python':
         case 'py':
-          return await this.executePython(code, timeoutMs * 2); // Python needs more time
+          return await this.executePython(code); // Python needs more time
           
         case 'html':
           return await this.executeHTML(code);

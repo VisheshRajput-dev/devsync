@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
+import { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import Editor from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
 
@@ -134,29 +134,6 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ code, onCodeCha
 
     return () => observer.disconnect();
   }, []);
-
-  const getLanguageDisplayName = (lang: string): string => {
-    const languageMap: { [key: string]: string } = {
-      'javascript': 'JavaScript',
-      'typescript': 'TypeScript',
-      'html': 'HTML',
-      'css': 'CSS',
-      'python': 'Python',
-      'java': 'Java',
-      'cpp': 'C++',
-      'c': 'C',
-      'json': 'JSON',
-      'xml': 'XML',
-      'markdown': 'Markdown',
-      'sql': 'SQL',
-      'shell': 'Shell',
-      'powershell': 'PowerShell',
-      'dockerfile': 'Dockerfile',
-      'yaml': 'YAML',
-      'plaintext': 'Plain Text'
-    };
-    return languageMap[lang] || lang.toUpperCase();
-  };
 
   return (
     <div className="h-full w-full">

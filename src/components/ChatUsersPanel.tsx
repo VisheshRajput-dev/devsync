@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { 
@@ -8,7 +7,6 @@ import {
   ChevronRight,
   ChevronDown
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import ChatBox from './ChatBox';
 import UserList from './UserList';
 import type { User, Message } from '../types';

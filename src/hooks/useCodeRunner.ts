@@ -1,11 +1,10 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { executeCode, type ExecutionResult } from '../lib/codeRunner';
 
 export const useCodeRunner = () => {
   const [isExecuting, setIsExecuting] = useState(false);
   const [result, setResult] = useState<ExecutionResult | null>(null);
   const [executionHistory, setExecutionHistory] = useState<ExecutionResult[]>([]);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const runCode = useCallback(async (code: string, language: string = 'javascript', timeoutMs: number = 5000) => {
     if (isExecuting) {

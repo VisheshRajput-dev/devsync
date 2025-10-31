@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { User } from 'lucide-react';
 import devsyncLogo from '../assets/devsync-logo.png';
 
 interface UsernamePromptProps {
