@@ -18,15 +18,39 @@ const getCorsOrigins = () => {
   }
   // If it's a comma-separated string, split it and trim each origin
   if (typeof corsOrigin === 'string' && corsOrigin.includes(',')) {
-    return corsOrigin.split(',').map(origin => origin.trim()).filter(Boolean);
+    return corsOrigin.split(',').map(origin => {
+      const trimmed = origin.trim();
+      // Remove trailing slash to match browser origin exactly
+      return trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
+    }).filter(Boolean);
   }
-  return corsOrigin;
+  // Remove trailing slash if present
+  const trimmed = corsOrigin.trim();
+  return trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
+};
+
+// CORS origin matching function - handles exact match and trailing slash variations
+const corsOriginMatcher = (origin, callback) => {
+  const allowedOrigins = getCorsOrigins();
+  const originsArray = Array.isArray(allowedOrigins) ? allowedOrigins : [allowedOrigins];
+  
+  // Normalize origin - remove trailing slash
+  const normalizedOrigin = origin?.endsWith('/') ? origin.slice(0, -1) : origin;
+  
+  // Check if origin matches any allowed origin (with or without trailing slash)
+  const isAllowed = originsArray.some(allowed => {
+    const normalizedAllowed = allowed?.endsWith('/') ? allowed.slice(0, -1) : allowed;
+    return normalizedOrigin === normalizedAllowed;
+  });
+  
+  callback(null, isAllowed);
 };
 
 const io = new Server(server, {
   cors: {
-    origin: getCorsOrigins(),
-    methods: ["GET", "POST"]
+    origin: corsOriginMatcher,
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
@@ -34,8 +58,25 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3002;
 
-// Middleware
-app.use(cors());
+// Middleware - CORS with same trailing slash normalization
+app.use(cors({
+  origin: (origin, callback) => {
+    const allowedOrigins = getCorsOrigins();
+    const originsArray = Array.isArray(allowedOrigins) ? allowedOrigins : [allowedOrigins];
+    
+    // Normalize origin - remove trailing slash
+    const normalizedOrigin = origin?.endsWith('/') ? origin.slice(0, -1) : origin;
+    
+    // Check if origin matches any allowed origin (with or without trailing slash)
+    const isAllowed = originsArray.some(allowed => {
+      const normalizedAllowed = allowed?.endsWith('/') ? allowed.slice(0, -1) : allowed;
+      return normalizedOrigin === normalizedAllowed;
+    });
+    
+    callback(null, isAllowed);
+  },
+  credentials: true
+}));
 app.use(express.json());
 
 // In-memory storage for rooms
